@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "app"))
 
-import assistant  # noqa: E402
+import assistant  # noqa: E402  # pyright: ignore[reportMissingImports]
 
 REFUSAL_PHRASES = ("don't have that information", "do not have that information")
 
@@ -102,7 +102,23 @@ def regression_gate(baseline, current):
       - pass rate must not drop
       - average latency or total tokens must not grow by more than some percentage
     """
-    return []  # TODO: replace with your gate logic
+    baseline_by_id = {row["id"]: row for row in baseline.get("results", [])}
+    current_by_id = {row["id"]: row for row in current.get("results", [])}
+    problems = []
+
+    for case_id, old_result in baseline_by_id.items():
+        new_result = current_by_id.get(case_id)
+        if old_result.get("passed") and new_result and not new_result.get("passed"):
+            problems.append(f"case '{case_id}' passed in baseline but fails now")
+
+    # A lower overall pass rate indicates a regression even if case IDs changed.
+    if current.get("pass_rate", 0) < baseline.get("pass_rate", 0):
+        problems.append(
+            f"pass rate dropped from {baseline.get('pass_rate', 0):.0%} "
+            f"to {current.get('pass_rate', 0):.0%}"
+        )
+
+    return problems
 
 
 def main():
